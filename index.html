@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>React Todo Uygulaması</title>
+    
+    <!-- Tailwind CSS CDN (Not: Üretim için PostCSS eklentisi veya Tailwind CLI kullanın) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
+    
+    <!-- React -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gradient-to-r from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-indigo-950 min-h-screen py-8 transition-colors duration-300">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // LocalStorage işlemleri için yardımcı fonksiyonlar
+        const LOCAL_STORAGE_KEY = 'react-todo-app-tasks';
+        const DARK_MODE_KEY = 'react-todo-app-dark-mode';
+        
+        const saveToLocalStorage = (items) => {
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(items));
+        };
+        
+        const loadFromLocalStorage = () => {
+            const storedItems = localStorage.getItem(LOCAL_STORAGE_KEY);
+            return storedItems ? JSON.parse(storedItems) : [];
+        };
+        
+        const saveDarkModePreference = (isDarkMode) => {
+            localStorage.setItem(DARK_MODE_KEY, JSON.stringify(isDarkMode));
+        };
+        
+        const loadDarkModePreference = () => {
+            const storedPreference = localStorage.getItem(DARK_MODE_KEY);
+            return storedPreference ? JSON.parse(storedPreference) : false;
+        };
+        
+        // Kategori renkleri (Light ve Dark Mode için)
+        const categoryColors = {
+            light: {
+                "Kişisel": "bg-purple-100 text-purple-800",
+                "İş": "bg-blue-100 text-blue-800",
+                "Alışveriş": "bg-green-100 text-green-800",
+                "Diğer": "bg-gray-100 text-gray-800"
+            },
+            dark: {
+                "Kişisel": "bg-purple-900 text-purple-200",
+                "İş": "bg-blue-900 text-blue-200",
+                "Alışveriş": "bg-green-900 text-green-200",
+                "Diğer": "bg-gray-800 text-gray-200"
+            }
+        };
+        
+        // Dark Mode Toggle bileşeni
+        const DarkModeToggle = ({ isDarkMode, toggleDarkMode }) => {
+            return (
+                React.createElement("div", { className: "flex items-center gap-2" }, [
+                    React.createElement("span", { 
+                        className: "text-gray-700 dark:text-gray-300",
+                        key: "light-icon"
+                    }, 
+                        React.createElement("i", { className: "fas fa-sun" })
+                    ),
+                    React.createElement("button", {
+                        onClick: toggleDarkMode,
+                        className: "relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2",
+                        role: "switch",
+                        style: {
+                            backgroundColor: isDarkMode ? '#3b82f6' : '#e5e7eb'
+                        },
+                        key: "toggle-button"
+                    }, [
+                        React.createElement("span", { 
+                            className: `inline-block h-4 w-4 transform rounded-full bg-white transition duration-300 ease-in-out ${isDarkMode ? 'translate-x-6' : 'translate-x-1'}`,
+                            key: "toggle-handle"
+                        })
+                    ]),
+                    React.createElement("span", { 
+                        className: "text-gray-700 dark:text-gray-300",
+                        key: "dark-icon"
+                    }, 
+                        React.createElement("i", { className: "fas fa-moon" })
+                    )
+                ])
+            );
+        };
+        
+        // Todo bileşeni
+        const TodoItem = ({ todo, toggleTodo, deleteTodo, editTodo, isDarkMode }) => {
+            const [isEditing, setIsEditing] = React.useState(false);
+            const [editedText, setEditedText] = React.useState(todo.text);
+            
+            const handleEdit = () => {
+                if (editedText.trim()) {
+                    editTodo(todo.id, editedText);
+                    setIsEditing(false);
+                }
+            };
+            
+            const handleKeyDown = (e) => {
+                if (e.key === 'Enter') {
+                    handleEdit();
+                } else if (e.key === 'Escape') {
+                    setIsEditing(false);
+                    setEditedText(todo.text);
+                }
+            };
+            
+            const mode = isDarkMode ? 'dark' : 'light';
+            
+            return (
+                React.createElement("li", {
+                    className: `flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm hover:shadow-md transition duration-200 border-l-4 ${todo.completed ? 'border-green-500' : 'border-blue-500'}`
+                }, [
+                    React.createElement("div", { className: "flex items-center gap-3 flex-1", key: "main-content" }, [
+                        React.createElement("input", {
+                            type: "checkbox",
+                            checked: todo.completed,
+                            onChange: () => toggleTodo(todo.id),
+                            className: "w-5 h-5 cursor-pointer accent-blue-500",
+                            key: "checkbox"
+                        }),
+                        
+                        isEditing ? 
+                            React.createElement("input", {
+                                type: "text",
+                                value: editedText,
+                                onChange: (e) => setEditedText(e.target.value),
+                                onBlur: handleEdit,
+                                onKeyDown: handleKeyDown,
+                                className: "flex-1 p-1 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white dark:border-gray-600",
+                                autoFocus: true,
+                                key: "edit-input"
+                            })
+                        :
+                        React.createElement("div", { className: "flex flex-col flex-1", key: "text-container" }, [
+                                React.createElement("span", {
+                                    className: `${todo.completed ? 'line-through text-gray-500 dark:text-gray-400' : 'text-gray-800 dark:text-gray-200'} font-medium`,
+                                    key: "text"
+                                }, todo.text),
+                                
+                                todo.category && React.createElement("span", {
+                                    className: `text-xs px-2 py-1 rounded-full mt-1 inline-block w-fit ${categoryColors[mode][todo.category] || categoryColors[mode]["Diğer"]}`,
+                                    key: "category"
+                                }, todo.category),
+                                
+                                todo.dueDate && React.createElement("span", {
+                                    className: "text-xs text-gray-500 dark:text-gray-400 mt-1",
+                                    key: "due-date"
+                                }, [
+                                    React.createElement("i", { className: "fas fa-calendar-alt mr-1", key: "calendar-icon" }),
+                                    new Date(todo.dueDate).toLocaleDateString('tr-TR')
+                                ])
+                            ])
+                    ]),
+                    
+                    React.createElement("div", { className: "flex gap-2", key: "actions" }, [
+                        !isEditing && React.createElement("button", {
+                            onClick: () => setIsEditing(true),
+                            className: "text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition duration-200 p-1",
+                            title: "Düzenle",
+                            key: "edit-button"
+                        }, React.createElement("i", { className: "fas fa-edit" })),
+                        
+                        React.createElement("button", {
+                            onClick: () => deleteTodo(todo.id),
+                            className: "text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition duration-200 p-1",
+                            title: "Sil",
+                            key: "delete-button"
+                        }, React.createElement("i", { className: "fas fa-trash-alt" }))
+                    ])
+                ])
+            );
+        };
+        
+        // Ana uygulama bileşeni
+        const TodoApp = () => {
+            const [todos, setTodos] = React.useState(() => loadFromLocalStorage());
+            const [inputValue, setInputValue] = React.useState('');
+            const [category, setCategory] = React.useState('');
+            const [dueDate, setDueDate] = React.useState('');
+            const [filter, setFilter] = React.useState('all');
+            const [sort, setSort] = React.useState('created');
+            const [isDarkMode, setIsDarkMode] = React.useState(() => loadDarkModePreference());
+            
+            // Dark Mode değiştirme fonksiyonu
+            const toggleDarkMode = () => {
+                const newMode = !isDarkMode;
+                setIsDarkMode(newMode);
+                saveDarkModePreference(newMode);
+                
+                if (newMode) {
+                    document.documentElement.classList.add('dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                }
+            };
+            
+            // Dark Mode'u sayfa yüklendiğinde ayarla
+            React.useEffect(() => {
+                if (isDarkMode) {
+                    document.documentElement.classList.add('dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                }
+            }, []);
+            
+            // Yeni görev ekleme
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (!inputValue.trim()) return;
+                
+                const newTodo = {
+                    id: Date.now(),
+                    text: inputValue,
+                    completed: false,
+                    createdAt: new Date().toISOString(),
+                    category: category || "Diğer",
+                    dueDate: dueDate || null
+                };
+                
+                const updatedTodos = [...todos, newTodo];
+                setTodos(updatedTodos);
+                saveToLocalStorage(updatedTodos);
+                
+                // Form alanlarını sıfırla
+                setInputValue('');
+                setCategory('');
+                setDueDate('');
+            };
+            
+            // Görev tamamlama/tamamlanmadı olarak işaretleme
+            const toggleTodo = (id) => {
+                const updatedTodos = todos.map(todo => 
+                    todo.id === id ? { ...todo, completed: !todo.completed } : todo
+                );
+                setTodos(updatedTodos);
+                saveToLocalStorage(updatedTodos);
+            };
+            
+            // Görev silme
+            const deleteTodo = (id) => {
+                const updatedTodos = todos.filter(todo => todo.id !== id);
+                setTodos(updatedTodos);
+                saveToLocalStorage(updatedTodos);
+            };
+            
+            // Görev düzenleme
+            const editTodo = (id, newText) => {
+                const updatedTodos = todos.map(todo => 
+                    todo.id === id ? { ...todo, text: newText } : todo
+                );
+                setTodos(updatedTodos);
+                saveToLocalStorage(updatedTodos);
+            };
+            
+            // Tamamlanan tüm görevleri temizleme
+            const clearCompleted = () => {
+                const updatedTodos = todos.filter(todo => !todo.completed);
+                setTodos(updatedTodos);
+                saveToLocalStorage(updatedTodos);
+            };
+            
+            // Filtreleme ve sıralama
+            const getFilteredAndSortedTodos = () => {
+                let filteredTodos = [...todos];
+                
+                // Filtreleme
+                if (filter === 'active') {
+                    filteredTodos = filteredTodos.filter(todo => !todo.completed);
+                } else if (filter === 'completed') {
+                    filteredTodos = filteredTodos.filter(todo => todo.completed);
+                }
+                
+                // Sıralama
+                filteredTodos.sort((a, b) => {
+                    if (sort === 'created') {
+                        return new Date(b.createdAt) - new Date(a.createdAt);
+                    } else if (sort === 'alphabetical') {
+                        return a.text.localeCompare(b.text, 'tr');
+                    } else if (sort === 'dueDate') {
+                        if (!a.dueDate) return 1;
+                        if (!b.dueDate) return -1;
+                        return new Date(a.dueDate) - new Date(b.dueDate);
+                    }
+                    return 0;
+                });
+                
+                return filteredTodos;
+            };
+            
+            const filteredAndSortedTodos = getFilteredAndSortedTodos();
+            const activeTodoCount = todos.filter(todo => !todo.completed).length;
+            
+            return (
+                React.createElement("div", { className: "max-w-2xl mx-auto" }, [
+                    React.createElement("div", { 
+                        className: "bg-white dark:bg-gray-800 rounded-lg shadow-xl overflow-hidden", 
+                        key: "main-card" 
+                    }, [
+                        React.createElement("div", { 
+                            className: "bg-gradient-to-r from-blue-600 to-indigo-700 dark:from-indigo-900 dark:to-purple-900 p-6 flex justify-between items-center", 
+                            key: "header" 
+                        }, [
+                            React.createElement("div", { key: "header-text" }, [
+                                React.createElement("h1", { 
+                                    className: "text-3xl font-bold text-white text-center",
+                                    key: "title"
+                                }, "Yapılacaklar Listesi"),
+                                React.createElement("p", { 
+                                    className: "text-blue-100 text-center mt-2",
+                                    key: "subtitle" 
+                                }, "Görevlerinizi düzenleyin ve takip edin")
+                            ]),
+                            React.createElement(DarkModeToggle, {
+                                isDarkMode: isDarkMode,
+                                toggleDarkMode: toggleDarkMode,
+                                key: "dark-mode-toggle"
+                            })
+                        ]),
+                        React.createElement("div", { 
+                            className: "p-6 dark:bg-gray-800", 
+                            key: "content" 
+                        }, [
+                            React.createElement("form", { 
+                                onSubmit: handleSubmit, 
+                                className: "mb-6 space-y-4", 
+                                key: "form" 
+                            }, [
+                                React.createElement("div", { 
+                                    className: "flex gap-2", 
+                                    key: "input-row" 
+                                }, [
+                                    React.createElement("input", {
+                                        type: "text",
+                                        value: inputValue,
+                                        onChange: (e) => setInputValue(e.target.value),
+                                        placeholder: "Yeni görev ekle...",
+                                        className: "flex-1 p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400",
+                                        key: "text-input"
+                                    }),
+                                    React.createElement("button", {
+                                        type: "submit",
+                                        className: "bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600 transition duration-200 font-medium",
+                                        key: "add-button"
+                                    }, [
+                                        React.createElement("i", { 
+                                            className: "fas fa-plus mr-2", 
+                                            key: "plus-icon" 
+                                        }),
+                                        "Ekle"
+                                    ])
+                                ]),
+                                
+                                React.createElement("div", { 
+                                    className: "flex flex-wrap gap-4", 
+                                    key: "form-options" 
+                                }, [
+                                    React.createElement("div", { 
+                                        className: "flex-1 min-w-[200px]", 
+                                        key: "category-container" 
+                                    }, [
+                                        React.createElement("label", { 
+                                            className: "block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1",
+                                            key: "category-label"
+                                        }, "Kategori"),
+                                        React.createElement("select", {
+                                            value: category,
+                                            onChange: (e) => setCategory(e.target.value),
+                                            className: "w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white",
+                                            key: "category-select"
+                                        }, [
+                                            React.createElement("option", { 
+                                                value: "", 
+                                                key: "category-default" 
+                                            }, "Kategori Seçin"),
+                                            React.createElement("option", { 
+                                                value: "Kişisel", 
+                                                key: "category-personal" 
+                                            }, "Kişisel"),
+                                            React.createElement("option", { 
+                                                value: "İş", 
+                                                key: "category-work" 
+                                            }, "İş"),
+                                            React.createElement("option", { 
+                                                value: "Alışveriş", 
+                                                key: "category-shopping" 
+                                            }, "Alışveriş"),
+                                            React.createElement("option", { 
+                                                value: "Diğer", 
+                                                key: "category-other" 
+                                            }, "Diğer")
+                                        ])
+                                    ]),
+                                    
+                                    React.createElement("div", { 
+                                        className: "flex-1 min-w-[200px]", 
+                                        key: "date-container" 
+                                    }, [
+                                        React.createElement("label", { 
+                                            className: "block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1",
+                                            key: "date-label" 
+                                        }, "Son Tarih"),
+                                        React.createElement("input", {
+                                            type: "date",
+                                            value: dueDate,
+                                            onChange: (e) => setDueDate(e.target.value),
+                                            className: "w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white",
+                                            key: "date-input"
+                                        })
+                                    ])
+                                ])
+                            ]),
+                            
+                            React.createElement("div", { 
+                                className: "flex justify-between items-center mb-4 flex-wrap gap-3", 
+                                key: "filters" 
+                            }, [
+                                React.createElement("div", { 
+                                    className: "flex items-center gap-2",
+                                    key: "filter-buttons"
+                                }, [
+                                    React.createElement("span", { 
+                                        className: "text-sm text-gray-600 dark:text-gray-400",
+                                        key: "filter-label"
+                                    }, "Göster:"),
+                                    React.createElement("div", { 
+                                        className: "flex border rounded-lg overflow-hidden dark:border-gray-600",
+                                        key: "filter-options"
+                                    }, [
+                                        React.createElement("button", {
+                                            onClick: () => setFilter('all'),
+                                            className: `px-3 py-1 text-sm ${filter === 'all' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`,
+                                            key: "filter-all"
+                                        }, "Tümü"),
+                                        React.createElement("button", {
+                                            onClick: () => setFilter('active'),
+                                            className: `px-3 py-1 text-sm ${filter === 'active' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`,
+                                            key: "filter-active"
+                                        }, "Aktif"),
+                                        React.createElement("button", {
+                                            onClick: () => setFilter('completed'),
+                                            className: `px-3 py-1 text-sm ${filter === 'completed' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`,
+                                            key: "filter-completed"
+                                        }, "Tamamlanan")
+                                    ])
+                                ]),
+                                
+                                React.createElement("div", { 
+                                    className: "flex items-center gap-2",
+                                    key: "sort-container" 
+                                }, [
+                                    React.createElement("span", { 
+                                        className: "text-sm text-gray-600 dark:text-gray-400",
+                                        key: "sort-label"
+                                    }, "Sırala:"),
+                                    React.createElement("select", {
+                                        value: sort,
+                                        onChange: (e) => setSort(e.target.value),
+                                        className: "p-1 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white",
+                                        key: "sort-select"
+                                    }, [
+                                        React.createElement("option", { 
+                                            value: "created",
+                                            key: "sort-created"
+                                        }, "Oluşturma Tarihi"),
+                                        React.createElement("option", { 
+                                            value: "alphabetical",
+                                            key: "sort-alpha"
+                                        }, "Alfabetik"),
+                                        React.createElement("option", { 
+                                            value: "dueDate",
+                                            key: "sort-duedate"
+                                        }, "Son Tarih")
+                                    ])
+                                ])
+                            ]),
+                            
+                            todos.length > 0 ? 
+                                React.createElement("div", { key: "todos-container" }, [
+                                    React.createElement("ul", { 
+                                        className: "space-y-3 mb-4", 
+                                        key: "todo-list" 
+                                    },
+                                        filteredAndSortedTodos.map(todo => 
+                                            React.createElement(TodoItem, {
+                                                key: todo.id,
+                                                todo: todo,
+                                                toggleTodo: toggleTodo,
+                                                deleteTodo: deleteTodo,
+                                                editTodo: editTodo,
+                                                isDarkMode: isDarkMode
+                                            })
+                                        )
+                                    ),
+                                    
+                                    React.createElement("div", { 
+                                        className: "flex justify-between items-center text-sm text-gray-600 dark:text-gray-400 pt-4 border-t dark:border-gray-700", 
+                                        key: "list-footer" 
+                                    }, [
+                                        React.createElement("div", { key: "count" }, 
+                                            React.createElement("span", {}, `${activeTodoCount} aktif görev`)
+                                        ),
+                                        
+                                        todos.some(todo => todo.completed) && 
+                                            React.createElement("button", {
+                                                onClick: clearCompleted,
+                                                className: "text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition",
+                                                key: "clear-button"
+                                            }, "Tamamlananları Temizle")
+                                    ])
+                                ])
+                            : 
+                                React.createElement("div", { 
+                                    className: "flex flex-col items-center justify-center py-10 text-gray-500 dark:text-gray-400", 
+                                    key: "empty-state" 
+                                }, [
+                                    React.createElement("i", { 
+                                        className: "fas fa-clipboard-list text-5xl mb-4", 
+                                        key: "empty-icon" 
+                                    }),
+                                    React.createElement("p", { 
+                                        className: "text-center mb-2 font-medium", 
+                                        key: "empty-title" 
+                                    }, "Henüz görev eklenmedi."),
+                                    React.createElement("p", { 
+                                        className: "text-center text-sm", 
+                                        key: "empty-subtitle" 
+                                    }, "Yeni bir görev eklemek için yukarıdaki formu doldurun.")
+                                ])
+                        ])
+                    ]),
+                    
+                    React.createElement("div", { 
+                        className: "mt-6 text-center text-gray-500 dark:text-gray-400 text-sm", 
+                        key: "footer" 
+                    },
+                        React.createElement("p", { key: "footer-text" }, `© ${new Date().getFullYear()} React Todo Uygulaması`)
+                    )
+                ])
+            );
+        };
+
+        // Uygulamayı başlat
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(React.createElement(TodoApp));
+    </script>
+</body>
+</html>
